@@ -5,6 +5,11 @@ import axios from 'axios';
 import { Kline } from './interface/kline.interface';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import {
+  BINANCE_SYMBOL,
+  POSITION,
+  SIDE,
+} from '../common/constants/app.constants';
 
 @Injectable()
 export class BinanceApiService {
@@ -95,10 +100,19 @@ export class BinanceApiService {
    * 신규주문
    * @param symbol
    * @param side
+   * @param positionSide
    * @param type
    * @param quantity
+   * @param stopPrice
    */
-  async newOrder(symbol: string, side: string, type: string, quantity: number) {
+  async newOrder(
+    symbol: BINANCE_SYMBOL,
+    side: SIDE,
+    positionSide: POSITION,
+    type: string,
+    quantity: number,
+    stopPrice?: number,
+  ) {
     try {
       // 바이낸스 API 키와 시크릿 키 가져오기
       const apiKey = this.configService.get<string>('BINANCE_API_KEY');
@@ -111,9 +125,11 @@ export class BinanceApiService {
       const params = {
         symbol,
         side,
+        positionSide,
         type,
         quantity,
         utcTimestamp,
+        stopPrice,
       };
 
       // QueryString 생성 및 서명
