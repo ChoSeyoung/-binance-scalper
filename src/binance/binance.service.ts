@@ -161,7 +161,7 @@ export class BinanceService {
         this.longConditionState.wasFractalDetected &&
         (this.longConditionState.wasEMA20Crossed ||
           this.longConditionState.wasEMA50Crossed);
-
+      console.log(result.result);
       if (this.longConditionState.wasPriceEMA50) {
         result.profitStopPrice = latestEma50 * 1.01;
         result.lossStopPrice = latestEma50 * 0.98;
@@ -178,7 +178,7 @@ export class BinanceService {
         this.shortConditionState.wasFractalDetected &&
         (this.shortConditionState.wasEMA20Crossed ||
           this.shortConditionState.wasEMA50Crossed);
-
+      console.log(result.result);
       if (this.shortConditionState.wasPriceEMA50) {
         result.profitStopPrice = latestEma50 * 0.95;
         result.lossStopPrice = latestEma50 * 1.01;

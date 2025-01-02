@@ -118,6 +118,7 @@ export class BinanceApiService {
       const apiKey = this.configService.get<string>('BINANCE_API_KEY');
       const secretKey = this.configService.get<string>('BINANCE_SECRET_KEY');
 
+      console.log(apiKey, secretKey);
       // 요청 시간 조회
       const { utc: utcTimestamp } = this.dateUtilService.getTimestamps();
 
