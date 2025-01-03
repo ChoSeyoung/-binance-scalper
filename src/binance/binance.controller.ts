@@ -66,8 +66,8 @@ export class BinanceController {
   async order() {
     const symbol = BINANCE_SYMBOL.XRPUSDT;
     const position = POSITION.LONG;
-    const profitStopPrice = 10;
-    const lossStopPrice = 1;
+    const profitStopPrice = 3;
+    const lossStopPrice = 2;
 
     await this.binanceApiService.newOrder({
       symbol: symbol,

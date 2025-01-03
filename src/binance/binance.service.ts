@@ -469,19 +469,27 @@ export class BinanceService {
     profitStopPrice: number,
     lossStopPrice: number,
   ) {
+    // 현재 심볼 정밀도 정보 가져오기
+    const symbolInfo = await this.binanceApiService.getSymbolInfo(symbol);
+    const pricePrecision = symbolInfo.pricePrecision;
+    const quantityPrecision = symbolInfo.quantityPrecision;
+
     // 현재 오픈 포지션 조회
     const positionRisk = await this.binanceApiService.getPositionRisk(symbol);
 
-    // 포지션 방향에 따라 익절/손절 검증
-    const currentPrice = positionRisk.markPrice;
-    if (
-      (position === POSITION.LONG &&
-        (profitStopPrice <= currentPrice || lossStopPrice >= currentPrice)) ||
-      (position === POSITION.SHORT &&
-        (profitStopPrice >= currentPrice || lossStopPrice <= currentPrice))
-    ) {
-      throw new Error('익절가와 손절가가 현재 포지션 방향과 맞지 않습니다.');
-    }
+    // 가격과 수량 반올림
+    const adjustedProfitPrice = this.stockUtilService.roundToPrecision(
+      profitStopPrice,
+      pricePrecision,
+    );
+    const adjustedLossPrice = this.stockUtilService.roundToPrecision(
+      lossStopPrice,
+      pricePrecision,
+    );
+    const adjustedQuantity = this.stockUtilService.roundToPrecision(
+      Math.abs(positionRisk.positionAmt),
+      quantityPrecision,
+    );
 
     // 롱 주문이면 매도를 설정하고, 숏 주문이면 매수를 설정함
     const takeProfitSide = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
@@ -491,7 +499,10 @@ export class BinanceService {
       side: takeProfitSide,
       quantity: Math.abs(positionRisk.positionAmt), // 음수 방지
       type: BINANCE_ORDER_TYPE.TAKE_PROFIT,
-      price: profitStopPrice * 0.99,
+      price: this.stockUtilService.roundToPrecision(
+        adjustedProfitPrice * 0.99,
+        pricePrecision,
+      ),
       stopPrice: profitStopPrice,
       timeInForce: TIME_IN_FORCE.GTC,
     });
@@ -501,7 +512,10 @@ export class BinanceService {
       side: takeProfitSide,
       quantity: Math.abs(positionRisk.positionAmt), // 음수 방지
       type: BINANCE_ORDER_TYPE.STOP,
-      price: lossStopPrice * 0.99,
+      price: this.stockUtilService.roundToPrecision(
+        adjustedLossPrice * 0.99,
+        pricePrecision,
+      ),
       stopPrice: lossStopPrice,
       timeInForce: TIME_IN_FORCE.GTC,
     });

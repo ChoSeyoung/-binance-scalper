@@ -71,4 +71,14 @@ export class StockUtilService {
 
     return fractals;
   }
+
+  /**
+   * 숫자를 특정 소수점 자릿수로 반올림하여 반환하는 유틸리티 함수입니다.
+   * @param value
+   * @param precision
+   */
+  roundToPrecision(value: number, precision: number): number {
+    const factor = Math.pow(10, precision); // 10의 `precision` 제곱
+    return Math.floor(value * factor) / factor; // 내림 처리 후 다시 나눔
+  }
 }

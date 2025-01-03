@@ -264,4 +264,34 @@ export class BinanceApiService {
       throw error;
     }
   }
+
+  /**
+   * 심볼 정보 조회
+   * @param symbol
+   */
+  public async getSymbolInfo(
+    symbol: string,
+  ): Promise<{ pricePrecision: number; quantityPrecision: number }> {
+    try {
+      const response = await this.axiosInstance.get('/v1/exchangeInfo');
+      const symbolInfo = response.data.symbols.find(
+        (s: any) => s.symbol === symbol,
+      );
+
+      if (!symbolInfo) {
+        throw new Error(`Symbol information not found for: ${symbol}`);
+      }
+
+      return {
+        pricePrecision: symbolInfo.pricePrecision,
+        quantityPrecision: symbolInfo.quantityPrecision,
+      };
+    } catch (error) {
+      console.error(
+        'Error fetching symbol information from Binance:',
+        error.response?.data || error.message,
+      );
+      throw new Error('Failed to fetch symbol information.');
+    }
+  }
 }
