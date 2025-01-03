@@ -179,11 +179,17 @@ export class BinanceApiService {
       const params: Record<string, any> = {
         symbol: args.symbol,
         side: args.side,
-        positionSide: args.positionSide,
         type: args.type,
         quantity: args.quantity,
         timestamp: serverTime,
       };
+
+      if (args.price) {
+        params.price = args.price;
+      }
+      if (args.timeInForce) {
+        params.timeInForce = args.timeInForce;
+      }
       if (args.stopPrice) {
         params.stopPrice = args.stopPrice;
       }

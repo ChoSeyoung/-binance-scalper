@@ -22,7 +22,6 @@ export interface ConditionState {
 export interface Order {
   symbol: BINANCE_SYMBOL;
   side: SIDE;
-  positionSide: POSITION;
   quantity: number;
   type: BINANCE_ORDER_TYPE;
   price?: number;

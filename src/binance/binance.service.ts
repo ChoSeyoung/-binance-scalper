@@ -60,7 +60,6 @@ export class BinanceService {
       const result = await this.binanceApiService.newOrder({
         symbol: symbol,
         side: SIDE.BUY,
-        positionSide: POSITION.LONG,
         quantity: BINANCE_CONSTANTS.MIN_BTC_TRADE,
         type: BINANCE_ORDER_TYPE.LIMIT,
         price: longCondition.tradePrice,
@@ -88,7 +87,6 @@ export class BinanceService {
       const result = await this.binanceApiService.newOrder({
         symbol: symbol,
         side: SIDE.SELL,
-        positionSide: POSITION.SHORT,
         quantity: BINANCE_CONSTANTS.MIN_BTC_TRADE,
         type: BINANCE_ORDER_TYPE.LIMIT,
         price: shortCondition.tradePrice,
@@ -451,10 +449,9 @@ export class BinanceService {
     profitStopPrice: number,
     lossStopPrice: number,
   ) {
-    const balances = await this.binanceApiService.getBalances();
-    const balance = parseFloat(
-      balances.find((b) => b.asset === symbol)?.balance || 0,
-    );
+    console.log(profitStopPrice, lossStopPrice);
+    // 현재 오픈 포지션 조회
+    const positionRisk = await this.binanceApiService.getPositionRisk(symbol);
 
     // 롱 주문이면 매도를 설정하고, 숏 주문이면 매수를 설정함
     const takeProfitSide = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
@@ -462,10 +459,9 @@ export class BinanceService {
     const takeProfitOrder = await this.binanceApiService.newOrder({
       symbol: symbol,
       side: takeProfitSide,
-      positionSide: position,
-      quantity: balance,
+      quantity: positionRisk.positionAmt,
       type: BINANCE_ORDER_TYPE.TAKE_PROFIT,
-      price: profitStopPrice,
+      price: profitStopPrice * 0.99,
       stopPrice: profitStopPrice,
       timeInForce: TIME_IN_FORCE.GTC,
     });
@@ -473,10 +469,9 @@ export class BinanceService {
     const stopLossOrder = await this.binanceApiService.newOrder({
       symbol: symbol,
       side: takeProfitSide,
-      positionSide: position,
-      quantity: balance,
+      quantity: positionRisk.positionAmt,
       type: BINANCE_ORDER_TYPE.STOP,
-      price: lossStopPrice,
+      price: lossStopPrice * 0.99,
       stopPrice: lossStopPrice,
       timeInForce: TIME_IN_FORCE.GTC,
     });

@@ -37,18 +37,21 @@ export enum TIME_IN_FORCE {
 }
 
 export enum BINANCE_ORDER_TYPE {
-  // 시장가로 즉시 체결
-  MARKET = 'MARKET',
-  // 지정가로 체결 (가격 지정 필요)
+  // 지정가 주문 (timeInForce, quantity, price)
   LIMIT = 'LIMIT',
-  // 특정 가격에서 지정가로 체결
+  // 시장가 주문 (quantity)
+  MARKET = 'MARKET',
+
+  // 손절 (price, stopPrice)
   STOP = 'STOP',
-  // 특정 가격에서 시장가로 체결
-  STOP_MARKET = 'STOP_MARKET',
-  // 이익 실현 지정가 주문
+  // 익절 (price, stopPrice)
   TAKE_PROFIT = 'TAKE_PROFIT',
-  // 이익 실현 시장가 주문
+
+  // 시장가 손절 (stopPrice)
+  STOP_MARKET = 'STOP_MARKET',
+  // 시장가 익절 (stopPrice)
   TAKE_PROFIT_MARKET = 'TAKE_PROFIT_MARKET',
-  // 추적 스탑 시장가 주문
+
+  // (callbackRate)
   TRAILING_STOP_MARKET = 'TRAILING_STOP_MARKET',
 }
