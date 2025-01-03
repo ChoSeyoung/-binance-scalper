@@ -3,12 +3,15 @@ import { Kline } from './interface/kline.interface';
 import { StockUtilService } from '../util/stock-util.service';
 import {
   BINANCE_CONSTANTS,
-  SIDE,
-  POSITION,
+  BINANCE_ORDER_TYPE,
   BINANCE_SYMBOL,
+  POSITION,
+  SIDE,
+  TIME_IN_FORCE,
 } from '../common/constants/app.constants';
 import { BinanceApiService } from './binance-api.service';
 import { Cron } from '@nestjs/schedule';
+import { ConditionState } from './interface/trade.interface';
 
 @Injectable()
 export class BinanceService {
@@ -40,13 +43,15 @@ export class BinanceService {
 
     const longCondition = await this.evaluateConditions(POSITION.LONG, symbol);
     if (longCondition.result) {
-      const result = await this.binanceApiService.newOrder(
-        symbol,
-        SIDE.BUY,
-        POSITION.LONG,
-        'MARKET',
-        0.001,
-      );
+      const result = await this.binanceApiService.newOrder({
+        symbol: symbol,
+        side: SIDE.BUY,
+        positionSide: POSITION.LONG,
+        quantity: BINANCE_CONSTANTS.MIN_BTC_TRADE,
+        type: BINANCE_ORDER_TYPE.LIMIT,
+        price: longCondition.tradePrice,
+        timeInForce: TIME_IN_FORCE.GTC,
+      });
       console.log('롱 매수 주문 결과:', result);
 
       // 추가 로직: 손절/익절가 설정 (API 호출 또는 저장)
@@ -63,13 +68,15 @@ export class BinanceService {
       symbol,
     );
     if (shortCondition.result) {
-      const result = await this.binanceApiService.newOrder(
-        symbol,
-        SIDE.SELL,
-        POSITION.SHORT,
-        'MARKET',
-        0.001,
-      );
+      const result = await this.binanceApiService.newOrder({
+        symbol: symbol,
+        side: SIDE.SELL,
+        positionSide: POSITION.SHORT,
+        quantity: BINANCE_CONSTANTS.MIN_BTC_TRADE,
+        type: BINANCE_ORDER_TYPE.LIMIT,
+        price: longCondition.tradePrice,
+        timeInForce: TIME_IN_FORCE.GTC,
+      });
       console.log('숏 매수 주문 결과:', result);
 
       // 추가 로직: 손절/익절가 설정 (API 호출 또는 저장)
@@ -92,11 +99,13 @@ export class BinanceService {
     symbol: string,
   ): Promise<{
     result: boolean;
+    tradePrice: number;
     profitStopPrice: number;
     lossStopPrice: number;
   }> {
     const result = {
       result: false,
+      tradePrice: 0,
       profitStopPrice: 0,
       lossStopPrice: 0,
     };
@@ -174,9 +183,11 @@ export class BinanceService {
           this.longConditionState.wasEMA50Crossed);
       console.log(result.result);
       if (this.longConditionState.wasPriceEMA50) {
+        result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA50Price * 1.01;
         result.lossStopPrice = latestEMA50Price * 0.98;
       } else {
+        result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA20Price * 1.01;
         result.lossStopPrice = latestEMA20Price * 0.98;
       }
@@ -191,9 +202,11 @@ export class BinanceService {
           this.shortConditionState.wasEMA50Crossed);
       console.log(result.result);
       if (this.shortConditionState.wasPriceEMA50) {
+        result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA50Price * 0.95;
         result.lossStopPrice = latestEMA50Price * 1.01;
       } else {
+        result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA20Price * 0.95;
         result.lossStopPrice = latestEMA20Price * 1.01;
       }
@@ -397,26 +410,36 @@ export class BinanceService {
     profitStopPrice: number,
     lossStopPrice: number,
   ) {
-    // 바이낸스 API 를 사용하여 손절/익절 설정
-    const side = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
-
-    const stopLossOrder = await this.binanceApiService.newOrder(
-      symbol,
-      side,
-      position,
-      'STOP_MARKET',
-      0.001,
-      lossStopPrice,
+    const balances = await this.binanceApiService.getBalances();
+    const balance = parseFloat(
+      balances.find((b) => b.asset === symbol)?.balance || 0,
     );
 
-    const takeProfitOrder = await this.binanceApiService.newOrder(
-      symbol,
-      side,
-      position,
-      'TAKE_PROFIT_MARKET',
-      0.001,
-      profitStopPrice,
-    );
-    console.log('손절/익절 설정 결과:', { stopLossOrder, takeProfitOrder });
+    // 롱 주문이면 매도를 설정하고, 숏 주문이면 매수를 설정함
+    const takeProfitSide = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
+
+    const takeProfitOrder = await this.binanceApiService.newOrder({
+      symbol: symbol,
+      side: takeProfitSide,
+      positionSide: position,
+      quantity: balance,
+      type: BINANCE_ORDER_TYPE.TAKE_PROFIT,
+      price: profitStopPrice,
+      stopPrice: profitStopPrice,
+      timeInForce: TIME_IN_FORCE.GTC,
+    });
+
+    const stopLossOrder = await this.binanceApiService.newOrder({
+      symbol: symbol,
+      side: takeProfitSide,
+      positionSide: position,
+      quantity: balance,
+      type: BINANCE_ORDER_TYPE.STOP,
+      price: lossStopPrice,
+      stopPrice: lossStopPrice,
+      timeInForce: TIME_IN_FORCE.GTC,
+    });
+
+    console.log('손절/익절 설정 결과:', { takeProfitOrder, stopLossOrder });
   }
 }

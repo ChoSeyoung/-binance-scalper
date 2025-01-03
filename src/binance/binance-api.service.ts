@@ -10,6 +10,7 @@ import {
   POSITION,
   SIDE,
 } from '../common/constants/app.constants';
+import { Order } from './interface/trade.interface';
 
 @Injectable()
 export class BinanceApiService {
@@ -87,7 +88,28 @@ export class BinanceApiService {
 
       return response.data;
     } catch (error) {
-      console.error('Error fetching balance data from Binance:', error.message);
+      console.error('Error fetching account data from Binance:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * 바이낸스 잔고조회
+   */
+  async getBalances(): Promise<any> {
+    try {
+      const serverTime = await this.getServerTime();
+      const params = { timestamp: serverTime };
+      const signature = this.generateSignature(params);
+
+      const response = await this.axiosInstance.get(`/v2/balance`, {
+        params: { ...params, signature },
+        headers: { 'X-MBX-APIKEY': this.apiKey },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching account data from Binance:', error.message);
       throw error;
     }
   }
@@ -109,26 +131,28 @@ export class BinanceApiService {
         params: { symbol, interval, limit },
       });
 
-      const candles: Kline[] = response.data.map((candle: any[]) => {
-        const { utc: utcOpenTime, kst: kstOpenTime } =
-          this.dateUtilService.formatTimestampMillis(candle[0]);
+      const candles: Kline[] = response.data
+        .slice(0, response.data.length - 1)
+        .map((candle: any[]) => {
+          const { utc: utcOpenTime, kst: kstOpenTime } =
+            this.dateUtilService.formatTimestampMillis(candle[0]);
 
-        return {
-          openTime: candle[0],
-          utcOpenTime,
-          kstOpenTime,
-          open: parseFloat(candle[1]),
-          high: parseFloat(candle[2]),
-          low: parseFloat(candle[3]),
-          close: parseFloat(candle[4]),
-          volume: parseFloat(candle[5]),
-          closeTime: candle[6],
-          quoteAssetVolume: parseFloat(candle[7]),
-          numberOfTrades: candle[8],
-          takerBuyBaseAssetVolume: parseFloat(candle[9]),
-          takerBuyQuoteAssetVolume: parseFloat(candle[10]),
-        };
-      });
+          return {
+            openTime: candle[0],
+            utcOpenTime,
+            kstOpenTime,
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            volume: parseFloat(candle[5]),
+            closeTime: candle[6],
+            quoteAssetVolume: parseFloat(candle[7]),
+            numberOfTrades: candle[8],
+            takerBuyBaseAssetVolume: parseFloat(candle[9]),
+            takerBuyQuoteAssetVolume: parseFloat(candle[10]),
+          };
+        });
 
       const williamsFractals =
         this.stockUtilService.calculateWilliamsFractals(candles);
@@ -147,32 +171,22 @@ export class BinanceApiService {
   /**
    * 신규 주문 요청
    *
-   * @param symbol
-   * @param side
-   * @param positionSide
-   * @param type
-   * @param quantity
-   * @param stopPrice
+   * @param args
    */
-  async newOrder(
-    symbol: BINANCE_SYMBOL,
-    side: SIDE,
-    positionSide: POSITION,
-    type: string,
-    quantity: number,
-    stopPrice?: number,
-  ): Promise<any> {
+  async newOrder(args: Order): Promise<any> {
     try {
       const serverTime = await this.getServerTime();
       const params: Record<string, any> = {
-        symbol,
-        side,
-        positionSide,
-        type,
-        quantity,
+        symbol: args.symbol,
+        side: args.side,
+        positionSide: args.positionSide,
+        type: args.type,
+        quantity: args.quantity,
         timestamp: serverTime,
-        ...(stopPrice && { stopPrice }),
       };
+      if (args.stopPrice) {
+        params.stopPrice = args.stopPrice;
+      }
 
       const signature = this.generateSignature(params);
 
