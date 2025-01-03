@@ -14,8 +14,8 @@ export class BinanceController {
     return this.binanceApiService.ping();
   }
 
-  @Get('/balance')
-  async getBalance() {
+  @Get('/account')
+  async getAccount() {
     return this.binanceApiService.getAccount();
   }
 

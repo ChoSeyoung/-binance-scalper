@@ -62,7 +62,7 @@ export class BinanceService {
       POSITION.SHORT,
       symbol,
     );
-    if (shortCondition) {
+    if (shortCondition.result) {
       const result = await this.binanceApiService.newOrder(
         symbol,
         SIDE.SELL,
@@ -112,19 +112,26 @@ export class BinanceService {
     // EMA 100 배열
     const ema100 = this.stockUtilService.calculateEMA(closes, 100);
 
-    const latestEma20 = ema20[ema20.length - 1];
-    const latestEma50 = ema50[ema50.length - 1];
+    const latestClosePrice = closes[closes.length - 1];
+    const latestEMA20Price = ema20[ema20.length - 1];
+    const latestEMA50Price = ema50[ema50.length - 1];
+    const latestEMA100Price = ema100[ema100.length - 1];
 
-    // 현재 가격이 EMA 100 선 아래로/ 하락했다면 조건 초기화
-    // EMA 20/50/100 선 정배열 되었는지 확인
+    // 현재 가격을 기준으로 롱/숏 거래 조건 확인
     const isLongConditionReady = this.isConditionReady(
       position,
-      closes,
-      ema20,
-      ema100,
+      latestClosePrice,
+      latestEMA20Price,
+      latestEMA100Price,
     );
+    // EMA 20/50/100 선 정배열 되었는지 확인
     if (isLongConditionReady) {
-      this.verifyEMAOrder(position, ema20, ema50, ema100);
+      this.verifyEMAOrder(
+        position,
+        latestEMA20Price,
+        latestEMA50Price,
+        latestEMA100Price,
+      );
     } else {
       this.resetCondition(position);
       return result;
@@ -148,7 +155,12 @@ export class BinanceService {
 
     // 윌리엄스 프랙탈 지표에서 down 표식 노출 됐다면 현재 가격이 EMA 20/50 선 상향 돌파하는지 확인
     if (this.longConditionState.wasFractalDetected) {
-      this.verifyPriceCrossEMA(position, candles, ema20, ema50);
+      this.verifyPriceCrossEMA(
+        position,
+        latestClosePrice,
+        latestEMA20Price,
+        latestEMA50Price,
+      );
     }
 
     if (position === POSITION.LONG) {
@@ -162,11 +174,11 @@ export class BinanceService {
           this.longConditionState.wasEMA50Crossed);
       console.log(result.result);
       if (this.longConditionState.wasPriceEMA50) {
-        result.profitStopPrice = latestEma50 * 1.01;
-        result.lossStopPrice = latestEma50 * 0.98;
+        result.profitStopPrice = latestEMA50Price * 1.01;
+        result.lossStopPrice = latestEMA50Price * 0.98;
       } else {
-        result.profitStopPrice = latestEma20 * 1.01;
-        result.lossStopPrice = latestEma20 * 0.98;
+        result.profitStopPrice = latestEMA20Price * 1.01;
+        result.lossStopPrice = latestEMA20Price * 0.98;
       }
     } else if (position === POSITION.SHORT) {
       console.log(this.shortConditionState);
@@ -179,11 +191,11 @@ export class BinanceService {
           this.shortConditionState.wasEMA50Crossed);
       console.log(result.result);
       if (this.shortConditionState.wasPriceEMA50) {
-        result.profitStopPrice = latestEma50 * 0.95;
-        result.lossStopPrice = latestEma50 * 1.01;
+        result.profitStopPrice = latestEMA50Price * 0.95;
+        result.lossStopPrice = latestEMA50Price * 1.01;
       } else {
-        result.profitStopPrice = latestEma20 * 0.95;
-        result.lossStopPrice = latestEma20 * 1.01;
+        result.profitStopPrice = latestEMA20Price * 0.95;
+        result.lossStopPrice = latestEMA20Price * 1.01;
       }
     }
 
@@ -191,46 +203,60 @@ export class BinanceService {
   }
 
   /**
-   * 롱 매수 진행 조건 확인 전 사전점검
-   * 현재가가 EMA 100 선 아래로 내려갈 경우 조건 초기화 후 매수중지 처리
+   * 거래 진행 조건 확인 전 사전점검
+   *
    * @param position
-   * @param closes
-   * @param ema20
-   * @param ema100
+   * @param latestClosePrice
+   * @param latestEma20Price
+   * @param latestEma100Price
    */
   private isConditionReady(
     position: POSITION,
-    closes: number[],
-    ema20: number[],
-    ema100: number[],
+    latestClosePrice: number,
+    latestEma20Price: number,
+    latestEma100Price: number,
   ): boolean {
     if (position === POSITION.LONG) {
-      return closes[closes.length - 1] > ema100[ema100.length - 1];
+      // 롱 거래 시 현재가가 EMA 100 선 가격보다 아래로 떨어지는 경우 거래금지
+      console.log(
+        `[LONG] 현재가: ${latestClosePrice}, EMA100: ${latestEma100Price}`,
+      );
+      return latestClosePrice > latestEma100Price;
     } else if (position === POSITION.SHORT) {
-      return closes[closes.length - 1] < ema20[ema100.length - 1];
+      // 숏 거래 시 현재가가 EMA 20 선 가격보다 위로 올라가는 경우 거래금지
+      console.log(
+        `[SHORT] 현재가: ${latestClosePrice}, EMA20: ${latestEma20Price}`,
+      );
+      return latestClosePrice < latestEma20Price;
     }
   }
 
   /**
-   * 조건 1: 지수이동평균선 20, 50, 100 순으로 정배열 확인
+   * 조건 1: EMA 정배열 확인
    */
   private verifyEMAOrder(
     position: POSITION,
-    ema20: number[],
-    ema50: number[],
-    ema100: number[],
+    latestEMA20Price: number,
+    latestEMA50Price: number,
+    latestEMA100Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(
+        `[LONG] EMA20: ${latestEMA20Price}, EMA50: ${latestEMA50Price}, EMA100: ${latestEMA100Price}`,
+      );
       if (
-        ema20[ema20.length - 1] > ema50[ema50.length - 1] &&
-        ema50[ema50.length - 1] > ema100[ema100.length - 1]
+        latestEMA20Price > latestEMA50Price &&
+        latestEMA50Price > latestEMA100Price
       ) {
         this.longConditionState.wasEMAOrdered = true;
       }
     } else if (position === POSITION.SHORT) {
+      console.log(
+        `[SHORT] EMA100: ${latestEMA100Price}, EMA50: ${latestEMA50Price}, EMA20: ${latestEMA20Price}`,
+      );
       if (
-        ema100[ema100.length - 1] > ema50[ema50.length - 1] &&
-        ema50[ema50.length - 1] > ema20[ema20.length - 1]
+        latestEMA100Price > latestEMA50Price &&
+        latestEMA50Price > latestEMA20Price
       ) {
         this.shortConditionState.wasEMAOrdered = true;
       }
@@ -240,21 +266,21 @@ export class BinanceService {
   /**
    * 조건 2-A. 현재 가격이 EMA 20 선 아래로 내려왔는지 확인
    * @param position
-   * @param closes
-   * @param ema20
+   * @param latestClosePrice
+   * @param latestEMA20Price
    * @private
    */
   private verifyPriceEMA20(
     position: POSITION,
-    closes: number[],
-    ema20: number[],
+    latestClosePrice: number[],
+    latestEMA20Price: number[],
   ): void {
     if (position === POSITION.LONG) {
-      if (closes[closes.length - 1] < ema20[ema20.length - 1]) {
+      if (latestClosePrice < latestEMA20Price) {
         this.longConditionState.wasPriceEMA20 = true;
       }
     } else if (position === POSITION.SHORT) {
-      if (closes[closes.length - 1] > ema20[ema20.length - 1]) {
+      if (latestClosePrice > latestEMA20Price) {
         this.shortConditionState.wasPriceEMA20 = true;
       }
     }
@@ -263,21 +289,21 @@ export class BinanceService {
   /**
    * 조건 2-B. 현재 가격이 EMA 50 선 아래로 내려왔는지 확인
    * @param position
-   * @param closes
-   * @param ema50
+   * @param latestClosePrice
+   * @param latestEMA50Price
    * @private
    */
   private verifyPriceEMA50(
     position: POSITION,
-    closes: number[],
-    ema50: number[],
+    latestClosePrice: number[],
+    latestEMA50Price: number[],
   ): void {
     if (position === POSITION.LONG) {
-      if (closes[closes.length - 1] < ema50[ema50.length - 1]) {
+      if (latestClosePrice < latestEMA50Price) {
         this.longConditionState.wasPriceEMA50 = true;
       }
     } else if (position === POSITION.SHORT) {
-      if (closes[closes.length - 1] < ema50[ema50.length - 1]) {
+      if (latestClosePrice < latestEMA50Price) {
         this.shortConditionState.wasPriceEMA50 = true;
       }
     }
@@ -314,34 +340,34 @@ export class BinanceService {
   /**
    * 조건 4. 현재 가격이 EMA 20선 혹은 50선 이상/이하로 상향/하향 돌파하는지 확인
    * @param position
-   * @param candles
-   * @param ema20
-   * @param ema50
+   * @param latestClosePrice
+   * @param latestEMA20Price
+   * @param latestEMA50Price
    * @private
    */
   private verifyPriceCrossEMA(
     position: POSITION,
-    candles: Kline[],
-    ema20: number[],
-    ema50: number[],
+    latestClosePrice: number,
+    latestEMA20Price: number,
+    latestEMA50Price: number,
   ): void {
     if (position === POSITION.LONG) {
       if (this.longConditionState.wasPriceEMA20) {
-        if (candles[candles.length - 1].close > ema20[ema20.length - 1]) {
+        if (latestClosePrice > latestEMA20Price) {
           this.longConditionState.wasEMA20Crossed = true;
         }
       } else if (this.longConditionState.wasPriceEMA50) {
-        if (candles[candles.length - 1].close > ema50[ema50.length - 1]) {
+        if (latestClosePrice > latestEMA50Price) {
           this.longConditionState.wasEMA50Crossed = true;
         }
       }
     } else if (position === POSITION.SHORT) {
       if (this.shortConditionState.wasPriceEMA20) {
-        if (candles[candles.length - 1].close < ema20[ema20.length - 1]) {
+        if (latestClosePrice < latestEMA20Price) {
           this.shortConditionState.wasEMA20Crossed = true;
         }
       } else if (this.shortConditionState.wasPriceEMA50) {
-        if (candles[candles.length - 1].close < ema50[ema50.length - 1]) {
+        if (latestClosePrice < latestEMA50Price) {
           this.shortConditionState.wasEMA50Crossed = true;
         }
       }
@@ -356,12 +382,12 @@ export class BinanceService {
       for (const key in this.longConditionState) {
         this.longConditionState[key] = false;
       }
-      console.log('롱 매수 조건 초기화 완료');
+      console.log('RESET LONG CONDITION');
     } else if (position === POSITION.SHORT) {
       for (const key in this.shortConditionState) {
         this.shortConditionState[key] = false;
       }
-      console.log('숏 매수 조건 초기화 완료');
+      console.log('RESET SHORT CONDITION');
     }
   }
 
