@@ -11,25 +11,28 @@ import {
 } from '../common/constants/app.constants';
 import { BinanceApiService } from './binance-api.service';
 import { Cron } from '@nestjs/schedule';
-import { ConditionState } from './interface/trade.interface';
+import {
+  ConditionState,
+  EvaluateConditionsResult,
+} from './interface/trade.interface';
 
 @Injectable()
 export class BinanceService {
   private longConditionState: ConditionState = {
-    wasEMAOrdered: false,
-    wasPriceEMA20: false,
-    wasPriceEMA50: false,
-    wasFractalDetected: false,
-    wasEMA20Crossed: false,
-    wasEMA50Crossed: false,
+    isGoldenArrangement: false,
+    isFirstDownwardBreakout: false,
+    isSecondDownwardBreakout: false,
+    isFractalSignal: false,
+    isFirstUpwardBreakout: false,
+    isSecondUpwardBreakout: false,
   };
   private shortConditionState: ConditionState = {
-    wasEMAOrdered: false,
-    wasPriceEMA20: false,
-    wasPriceEMA50: false,
-    wasFractalDetected: false,
-    wasEMA20Crossed: false,
-    wasEMA50Crossed: false,
+    isGoldenArrangement: false,
+    isFirstDownwardBreakout: false,
+    isSecondDownwardBreakout: false,
+    isFractalSignal: false,
+    isFirstUpwardBreakout: false,
+    isSecondUpwardBreakout: false,
   };
 
   constructor(
@@ -37,10 +40,21 @@ export class BinanceService {
     private readonly stockUtilService: StockUtilService,
   ) {}
 
-  @Cron('*/1 * * * *')
+  @Cron('*/5 * * * * *')
   async handleTradeCheck(): Promise<void> {
-    const symbol = BINANCE_SYMBOL.BTCUSDT;
+    const symbol = BINANCE_SYMBOL.XRPUSDT;
 
+    // 현재 열려있는 포지션 확인
+    const currentPosition =
+      await this.binanceApiService.getPositionRisk(symbol);
+
+    // 포지션 종료까지 대기
+    if (currentPosition) {
+      console.log('[SYSTEM] 포지션 종료 대기중');
+      return;
+    }
+
+    // 롱 매수 조건 평가
     const longCondition = await this.evaluateConditions(POSITION.LONG, symbol);
     if (longCondition.result) {
       const result = await this.binanceApiService.newOrder({
@@ -54,15 +68,18 @@ export class BinanceService {
       });
       console.log('롱 매수 주문 결과:', result);
 
-      // 추가 로직: 손절/익절가 설정 (API 호출 또는 저장)
+      // 손절/익절 설정
       await this.setProfitAndLoss(
         symbol,
         POSITION.LONG,
         longCondition.profitStopPrice,
         longCondition.lossStopPrice,
       );
+
+      return; // 롱 매수 처리 후 종료
     }
 
+    // 숏 매수 조건 평가
     const shortCondition = await this.evaluateConditions(
       POSITION.SHORT,
       symbol,
@@ -74,17 +91,17 @@ export class BinanceService {
         positionSide: POSITION.SHORT,
         quantity: BINANCE_CONSTANTS.MIN_BTC_TRADE,
         type: BINANCE_ORDER_TYPE.LIMIT,
-        price: longCondition.tradePrice,
+        price: shortCondition.tradePrice,
         timeInForce: TIME_IN_FORCE.GTC,
       });
       console.log('숏 매수 주문 결과:', result);
 
-      // 추가 로직: 손절/익절가 설정 (API 호출 또는 저장)
+      // 손절/익절 설정
       await this.setProfitAndLoss(
         symbol,
         POSITION.SHORT,
-        longCondition.profitStopPrice,
-        longCondition.lossStopPrice,
+        shortCondition.profitStopPrice,
+        shortCondition.lossStopPrice,
       );
     }
   }
@@ -97,13 +114,8 @@ export class BinanceService {
   async evaluateConditions(
     position: POSITION,
     symbol: string,
-  ): Promise<{
-    result: boolean;
-    tradePrice: number;
-    profitStopPrice: number;
-    lossStopPrice: number;
-  }> {
-    const result = {
+  ): Promise<EvaluateConditionsResult> {
+    const result: EvaluateConditionsResult = {
       result: false,
       tradePrice: 0,
       profitStopPrice: 0,
@@ -143,27 +155,32 @@ export class BinanceService {
       );
     } else {
       this.resetCondition(position);
-      return result;
     }
 
-    // 현재 가격이 EMA 20/50 선 아래로 하락하는지 확인
-    if (this.longConditionState.wasEMAOrdered) {
-      this.verifyPriceEMA20(position, closes, ema20);
+    if (this.longConditionState.isGoldenArrangement) {
+      this.checkFirstDownwardBreakoutCondition(
+        position,
+        latestClosePrice,
+        latestEMA20Price,
+        latestEMA100Price,
+      );
     }
-    if (this.longConditionState.wasEMAOrdered) {
-      this.verifyPriceEMA50(position, closes, ema50);
+    if (this.longConditionState.isGoldenArrangement) {
+      this.checkSecondDownwardBreakoutCondition(
+        position,
+        latestClosePrice,
+        latestEMA50Price,
+      );
     }
 
-    // 현재 가격이 EMA 20/50 선 아래로 하락했다면 윌리엄스 프랙탈 지표에서 down 표식 노출 확인
     if (
-      this.longConditionState.wasPriceEMA20 ||
-      this.longConditionState.wasPriceEMA50
+      this.longConditionState.isFirstDownwardBreakout ||
+      this.longConditionState.isSecondDownwardBreakout
     ) {
-      this.detectWilliamsFractal(position, candles);
+      this.checkWilliamsFractalType(position, candles);
     }
 
-    // 윌리엄스 프랙탈 지표에서 down 표식 노출 됐다면 현재 가격이 EMA 20/50 선 상향 돌파하는지 확인
-    if (this.longConditionState.wasFractalDetected) {
+    if (this.longConditionState.isFractalSignal) {
       this.verifyPriceCrossEMA(
         position,
         latestClosePrice,
@@ -173,16 +190,15 @@ export class BinanceService {
     }
 
     if (position === POSITION.LONG) {
-      console.log(this.longConditionState);
       result.result =
-        this.longConditionState.wasEMAOrdered &&
-        (this.longConditionState.wasPriceEMA20 ||
-          this.longConditionState.wasPriceEMA50) &&
-        this.longConditionState.wasFractalDetected &&
-        (this.longConditionState.wasEMA20Crossed ||
-          this.longConditionState.wasEMA50Crossed);
-      console.log(result.result);
-      if (this.longConditionState.wasPriceEMA50) {
+        this.longConditionState.isGoldenArrangement &&
+        (this.longConditionState.isFirstDownwardBreakout ||
+          this.longConditionState.isSecondDownwardBreakout) &&
+        this.longConditionState.isFractalSignal &&
+        (this.longConditionState.isFirstUpwardBreakout ||
+          this.longConditionState.isSecondUpwardBreakout);
+
+      if (this.longConditionState.isSecondDownwardBreakout) {
         result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA50Price * 1.01;
         result.lossStopPrice = latestEMA50Price * 0.98;
@@ -192,16 +208,15 @@ export class BinanceService {
         result.lossStopPrice = latestEMA20Price * 0.98;
       }
     } else if (position === POSITION.SHORT) {
-      console.log(this.shortConditionState);
       result.result =
-        this.shortConditionState.wasEMAOrdered &&
-        (this.shortConditionState.wasPriceEMA20 ||
-          this.shortConditionState.wasPriceEMA50) &&
-        this.shortConditionState.wasFractalDetected &&
-        (this.shortConditionState.wasEMA20Crossed ||
-          this.shortConditionState.wasEMA50Crossed);
-      console.log(result.result);
-      if (this.shortConditionState.wasPriceEMA50) {
+        this.shortConditionState.isGoldenArrangement &&
+        (this.shortConditionState.isFirstDownwardBreakout ||
+          this.shortConditionState.isSecondDownwardBreakout) &&
+        this.shortConditionState.isFractalSignal &&
+        (this.shortConditionState.isFirstUpwardBreakout ||
+          this.shortConditionState.isSecondUpwardBreakout);
+
+      if (this.shortConditionState.isSecondDownwardBreakout) {
         result.tradePrice = latestClosePrice;
         result.profitStopPrice = latestEMA50Price * 0.95;
         result.lossStopPrice = latestEMA50Price * 1.01;
@@ -211,6 +226,8 @@ export class BinanceService {
         result.lossStopPrice = latestEMA20Price * 1.01;
       }
     }
+
+    console.log('============================================================');
 
     return result;
   }
@@ -230,13 +247,13 @@ export class BinanceService {
     latestEma100Price: number,
   ): boolean {
     if (position === POSITION.LONG) {
-      // 롱 거래 시 현재가가 EMA 100 선 가격보다 아래로 떨어지는 경우 거래금지
+      console.log('[LONG] 현재가가 EMA 100 선 아래로 내려갔는지 확인');
       console.log(
         `[LONG] 현재가: ${latestClosePrice}, EMA100: ${latestEma100Price}`,
       );
       return latestClosePrice > latestEma100Price;
     } else if (position === POSITION.SHORT) {
-      // 숏 거래 시 현재가가 EMA 20 선 가격보다 위로 올라가는 경우 거래금지
+      console.log('[SHORT] 현재가가 EMA 20 선 위로 올라갔는지 확인');
       console.log(
         `[SHORT] 현재가: ${latestClosePrice}, EMA20: ${latestEma20Price}`,
       );
@@ -261,7 +278,7 @@ export class BinanceService {
         latestEMA20Price > latestEMA50Price &&
         latestEMA50Price > latestEMA100Price
       ) {
-        this.longConditionState.wasEMAOrdered = true;
+        this.longConditionState.isGoldenArrangement = true;
       }
     } else if (position === POSITION.SHORT) {
       console.log(
@@ -271,7 +288,7 @@ export class BinanceService {
         latestEMA100Price > latestEMA50Price &&
         latestEMA50Price > latestEMA20Price
       ) {
-        this.shortConditionState.wasEMAOrdered = true;
+        this.shortConditionState.isGoldenArrangement = true;
       }
     }
   }
@@ -281,20 +298,28 @@ export class BinanceService {
    * @param position
    * @param latestClosePrice
    * @param latestEMA20Price
+   * @param latestEMA100Price
    * @private
    */
-  private verifyPriceEMA20(
+  private checkFirstDownwardBreakoutCondition(
     position: POSITION,
-    latestClosePrice: number[],
-    latestEMA20Price: number[],
+    latestClosePrice: number,
+    latestEMA20Price: number,
+    latestEMA100Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(
+        `[LONG] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
+      );
       if (latestClosePrice < latestEMA20Price) {
-        this.longConditionState.wasPriceEMA20 = true;
+        this.longConditionState.isFirstDownwardBreakout = true;
       }
     } else if (position === POSITION.SHORT) {
-      if (latestClosePrice > latestEMA20Price) {
-        this.shortConditionState.wasPriceEMA20 = true;
+      console.log(
+        `[SHORT] 현재가: ${latestClosePrice}, EMA100: ${latestEMA100Price}`,
+      );
+      if (latestClosePrice > latestEMA100Price) {
+        this.shortConditionState.isFirstDownwardBreakout = true;
       }
     }
   }
@@ -306,18 +331,24 @@ export class BinanceService {
    * @param latestEMA50Price
    * @private
    */
-  private verifyPriceEMA50(
+  private checkSecondDownwardBreakoutCondition(
     position: POSITION,
-    latestClosePrice: number[],
-    latestEMA50Price: number[],
+    latestClosePrice: number,
+    latestEMA50Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(
+        `[LONG] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
+      );
       if (latestClosePrice < latestEMA50Price) {
-        this.longConditionState.wasPriceEMA50 = true;
+        this.longConditionState.isSecondDownwardBreakout = true;
       }
     } else if (position === POSITION.SHORT) {
-      if (latestClosePrice < latestEMA50Price) {
-        this.shortConditionState.wasPriceEMA50 = true;
+      console.log(
+        `[SHORT] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
+      );
+      if (latestClosePrice > latestEMA50Price) {
+        this.shortConditionState.isSecondDownwardBreakout = true;
       }
     }
   }
@@ -328,24 +359,22 @@ export class BinanceService {
    * @param candles
    * @private
    */
-  private detectWilliamsFractal(position: POSITION, candles: Kline[]): void {
+  private checkWilliamsFractalType(position: POSITION, candles: Kline[]): void {
+    const fractal =
+      candles[
+        candles.length -
+          (1 + BINANCE_CONSTANTS.DEFAULT_WILLIAMS_FRACTAL_PERIODS)
+      ].williamsFractalType;
+
     if (position === POSITION.LONG) {
-      if (
-        candles[
-          candles.length -
-            (1 + BINANCE_CONSTANTS.DEFAULT_WILLIAMS_FRACTAL_PERIODS)
-        ].williamsFractalType === 'down'
-      ) {
-        this.longConditionState.wasFractalDetected = true;
+      console.log(`[LONG] 윌리엄스 프랙탈 인디케이터: ${fractal}`);
+      if (fractal === 'down') {
+        this.longConditionState.isFractalSignal = true;
       }
     } else if (position === POSITION.SHORT) {
-      if (
-        candles[
-          candles.length -
-            (1 + BINANCE_CONSTANTS.DEFAULT_WILLIAMS_FRACTAL_PERIODS)
-        ].williamsFractalType === 'up'
-      ) {
-        this.shortConditionState.wasFractalDetected = true;
+      console.log(`[SHORT] 윌리엄스 프랙탈 인디케이터: ${fractal}`);
+      if (fractal === 'up') {
+        this.shortConditionState.isFractalSignal = true;
       }
     }
   }
@@ -365,23 +394,35 @@ export class BinanceService {
     latestEMA50Price: number,
   ): void {
     if (position === POSITION.LONG) {
-      if (this.longConditionState.wasPriceEMA20) {
+      if (this.longConditionState.isFirstDownwardBreakout) {
+        console.log(
+          `[LONG] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
+        );
         if (latestClosePrice > latestEMA20Price) {
-          this.longConditionState.wasEMA20Crossed = true;
+          this.longConditionState.isFirstUpwardBreakout = true;
         }
-      } else if (this.longConditionState.wasPriceEMA50) {
+      } else if (this.longConditionState.isSecondDownwardBreakout) {
+        console.log(
+          `[LONG] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
+        );
         if (latestClosePrice > latestEMA50Price) {
-          this.longConditionState.wasEMA50Crossed = true;
+          this.longConditionState.isSecondUpwardBreakout = true;
         }
       }
     } else if (position === POSITION.SHORT) {
-      if (this.shortConditionState.wasPriceEMA20) {
+      if (this.shortConditionState.isFirstDownwardBreakout) {
+        console.log(
+          `[SHORT] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
+        );
         if (latestClosePrice < latestEMA20Price) {
-          this.shortConditionState.wasEMA20Crossed = true;
+          this.shortConditionState.isFirstUpwardBreakout = true;
         }
-      } else if (this.shortConditionState.wasPriceEMA50) {
+      } else if (this.shortConditionState.isSecondDownwardBreakout) {
+        console.log(
+          `[SHORT] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
+        );
         if (latestClosePrice < latestEMA50Price) {
-          this.shortConditionState.wasEMA50Crossed = true;
+          this.shortConditionState.isSecondUpwardBreakout = true;
         }
       }
     }
@@ -395,12 +436,12 @@ export class BinanceService {
       for (const key in this.longConditionState) {
         this.longConditionState[key] = false;
       }
-      console.log('RESET LONG CONDITION');
+      console.log('[LONG] RESET CONDITION');
     } else if (position === POSITION.SHORT) {
       for (const key in this.shortConditionState) {
         this.shortConditionState[key] = false;
       }
-      console.log('RESET SHORT CONDITION');
+      console.log('[SHORT] RESET CONDITION');
     }
   }
 

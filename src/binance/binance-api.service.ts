@@ -10,7 +10,7 @@ import {
   POSITION,
   SIDE,
 } from '../common/constants/app.constants';
-import { Order } from './interface/trade.interface';
+import { Order, PositionRisk } from './interface/trade.interface';
 
 @Injectable()
 export class BinanceApiService {
@@ -42,7 +42,7 @@ export class BinanceApiService {
    * @private
    */
   private async getServerTime(): Promise<number> {
-    const response = await this.axiosInstance.get('/time');
+    const response = await this.axiosInstance.get('/v1/time');
     return response.data.serverTime;
   }
 
@@ -64,7 +64,7 @@ export class BinanceApiService {
    */
   async ping(): Promise<any> {
     try {
-      const response = await this.axiosInstance.get('/ping');
+      const response = await this.axiosInstance.get('/v1/ping');
       return response.data;
     } catch (error) {
       console.error('Error fetching ping data from Binance:', error.message);
@@ -190,7 +190,7 @@ export class BinanceApiService {
 
       const signature = this.generateSignature(params);
 
-      const response = await this.axiosInstance.post(`/order`, null, {
+      const response = await this.axiosInstance.post(`/v1/order`, null, {
         params: { ...params, signature },
         headers: { 'X-MBX-APIKEY': this.apiKey },
       });
@@ -199,6 +199,60 @@ export class BinanceApiService {
     } catch (error) {
       console.error(
         'Error creating a new order on Binance:',
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 특정 심볼의 포지션 정보 조회
+   *
+   * @param symbol
+   */
+  public async getPositionRisk(symbol: string): Promise<PositionRisk | null> {
+    try {
+      const serverTime = await this.getServerTime();
+      const params = {
+        symbol,
+        timestamp: serverTime,
+      };
+      const signature = this.generateSignature(params);
+      const response = await this.axiosInstance.get('/v3/positionRisk', {
+        params: { ...params, signature },
+        headers: { 'X-MBX-APIKEY': this.apiKey },
+      });
+
+      const position = response.data.find((p: any) => p.symbol === symbol);
+      if (!position) {
+        return null;
+      }
+
+      return {
+        symbol: position.symbol,
+        positionSide: position.positionSide,
+        positionAmt: parseFloat(position.positionAmt),
+        entryPrice: parseFloat(position.entryPrice),
+        breakEvenPrice: parseFloat(position.breakEvenPrice),
+        markPrice: parseFloat(position.markPrice),
+        unRealizedProfit: parseFloat(position.unRealizedProfit),
+        liquidationPrice: parseFloat(position.liquidationPrice),
+        isolatedMargin: parseFloat(position.isolatedMargin),
+        notional: parseFloat(position.notional),
+        marginAsset: position.marginAsset,
+        isolatedWallet: parseFloat(position.isolatedWallet),
+        initialMargin: parseFloat(position.initialMargin),
+        maintMargin: parseFloat(position.maintMargin),
+        positionInitialMargin: parseFloat(position.positionInitialMargin),
+        openOrderInitialMargin: parseFloat(position.openOrderInitialMargin),
+        adl: position.adl,
+        bidNotional: parseFloat(position.bidNotional),
+        askNotional: parseFloat(position.askNotional),
+        updateTime: position.updateTime,
+      };
+    } catch (error) {
+      console.error(
+        'Error fetching position risk data from Binance:',
         error.response?.data || error.message,
       );
       throw error;

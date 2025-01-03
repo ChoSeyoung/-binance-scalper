@@ -5,6 +5,7 @@ export enum BINANCE_CONSTANTS {
 
 export enum BINANCE_SYMBOL {
   BTCUSDT = 'BTCUSDT',
+  XRPUSDT = 'XRPUSDT',
 }
 
 export enum POSITION {
