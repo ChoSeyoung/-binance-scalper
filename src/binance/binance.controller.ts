@@ -14,6 +14,11 @@ export class BinanceController {
     return this.binanceApiService.ping();
   }
 
+  @Get('/balance')
+  async getBalance() {
+    return this.binanceApiService.getBalance();
+  }
+
   @Get('/candles')
   async getCandles(
     @Query('symbol') symbol: string,

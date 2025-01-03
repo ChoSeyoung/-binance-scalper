@@ -95,7 +95,7 @@ export class BinanceService {
     profitStopPrice: number;
     lossStopPrice: number;
   }> {
-    let result = {
+    const result = {
       result: false,
       profitStopPrice: 0,
       lossStopPrice: 0,
@@ -114,7 +114,6 @@ export class BinanceService {
 
     const latestEma20 = ema20[ema20.length - 1];
     const latestEma50 = ema50[ema50.length - 1];
-    const latestEma100 = ema100[ema100.length - 1];
 
     // 현재 가격이 EMA 100 선 아래로/ 하락했다면 조건 초기화
     // EMA 20/50/100 선 정배열 되었는지 확인
@@ -372,7 +371,7 @@ export class BinanceService {
     profitStopPrice: number,
     lossStopPrice: number,
   ) {
-    // 바이낸스 API를 사용하여 손절/익절 설정
+    // 바이낸스 API 를 사용하여 손절/익절 설정
     const side = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
 
     const stopLossOrder = await this.binanceApiService.newOrder(
