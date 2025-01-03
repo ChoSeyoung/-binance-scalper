@@ -18,6 +18,11 @@ export enum SIDE {
   SELL = 'SELL',
 }
 
+export enum WILLIAMS_FRACTAL_TYPE {
+  UP = 'UP',
+  DOWN = 'DOWN',
+}
+
 export enum TIME_IN_FORCE {
   /**
    * Good Til Canceled

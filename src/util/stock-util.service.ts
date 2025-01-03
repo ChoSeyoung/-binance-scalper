@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Kline } from '../binance/interface/kline.interface';
 import { WilliamsFractals } from '../binance/interface/fractal.interface';
-import { BINANCE_CONSTANTS } from '../common/constants/app.constants';
+import {
+  BINANCE_CONSTANTS,
+  WILLIAMS_FRACTAL_TYPE,
+} from '../common/constants/app.constants';
 
 @Injectable()
 export class StockUtilService {
@@ -50,11 +53,19 @@ export class StockUtilService {
       const min = Math.min(...slice.map((kline) => kline.low));
 
       if (currentHigh === max && slice[period].high === max) {
-        fractals.push({ type: 'up', index: i, value: currentHigh });
+        fractals.push({
+          type: WILLIAMS_FRACTAL_TYPE.UP,
+          index: i,
+          value: currentHigh,
+        });
       }
 
       if (currentLow === min && slice[period].low === min) {
-        fractals.push({ type: 'down', index: i, value: currentLow });
+        fractals.push({
+          type: WILLIAMS_FRACTAL_TYPE.DOWN,
+          index: i,
+          value: currentLow,
+        });
       }
     }
 

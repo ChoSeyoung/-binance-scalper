@@ -8,6 +8,7 @@ import {
   POSITION,
   SIDE,
   TIME_IN_FORCE,
+  WILLIAMS_FRACTAL_TYPE,
 } from '../common/constants/app.constants';
 import { BinanceApiService } from './binance-api.service';
 import { Cron } from '@nestjs/schedule';
@@ -269,6 +270,7 @@ export class BinanceService {
     latestEMA100Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(`[LONG] EMA 정배열 확인`);
       console.log(
         `[LONG] EMA20: ${latestEMA20Price}, EMA50: ${latestEMA50Price}, EMA100: ${latestEMA100Price}`,
       );
@@ -279,6 +281,7 @@ export class BinanceService {
         this.longConditionState.isGoldenArrangement = true;
       }
     } else if (position === POSITION.SHORT) {
+      console.log(`[SHORT] EMA 역배열 확인`);
       console.log(
         `[SHORT] EMA100: ${latestEMA100Price}, EMA50: ${latestEMA50Price}, EMA20: ${latestEMA20Price}`,
       );
@@ -292,7 +295,7 @@ export class BinanceService {
   }
 
   /**
-   * 조건 2-A. 현재 가격이 EMA 20 선 아래로 내려왔는지 확인
+   * 조건 2-A
    * @param position
    * @param latestClosePrice
    * @param latestEMA20Price
@@ -306,6 +309,7 @@ export class BinanceService {
     latestEMA100Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(`[LONG] 현재 가격이 EMA 20 선 아래로 내려왔는지 확인`);
       console.log(
         `[LONG] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
       );
@@ -313,6 +317,7 @@ export class BinanceService {
         this.longConditionState.isFirstDownwardBreakout = true;
       }
     } else if (position === POSITION.SHORT) {
+      console.log(`[SHORT] 현재 가격이 EMA 100 선 위로 올라왔는지 확인`);
       console.log(
         `[SHORT] 현재가: ${latestClosePrice}, EMA100: ${latestEMA100Price}`,
       );
@@ -323,7 +328,7 @@ export class BinanceService {
   }
 
   /**
-   * 조건 2-B. 현재 가격이 EMA 50 선 아래로 내려왔는지 확인
+   * 조건 2-B
    * @param position
    * @param latestClosePrice
    * @param latestEMA50Price
@@ -335,6 +340,7 @@ export class BinanceService {
     latestEMA50Price: number,
   ): void {
     if (position === POSITION.LONG) {
+      console.log(`[LONG] 현재 가격이 EMA 50 선 아래로 내려왔는지 확인`);
       console.log(
         `[LONG] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
       );
@@ -342,6 +348,7 @@ export class BinanceService {
         this.longConditionState.isSecondDownwardBreakout = true;
       }
     } else if (position === POSITION.SHORT) {
+      console.log(`[SHORT] 현재 가격이 EMA 50 선 위로 올라왔는지 확인`);
       console.log(
         `[SHORT] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
       );
@@ -352,7 +359,7 @@ export class BinanceService {
   }
 
   /**
-   * 조건 3. 윌리엄스 프랙탈 지표에 down 표시 확인
+   * 조건 3
    * @param position
    * @param candles
    * @private
@@ -365,20 +372,22 @@ export class BinanceService {
       ].williamsFractalType;
 
     if (position === POSITION.LONG) {
+      console.log(`[LONG] 윌리엄스 프랙탈 조건 확인`);
       console.log(`[LONG] 윌리엄스 프랙탈 인디케이터: ${fractal}`);
-      if (fractal === 'down') {
+      if (fractal === WILLIAMS_FRACTAL_TYPE.DOWN) {
         this.longConditionState.isFractalSignal = true;
       }
     } else if (position === POSITION.SHORT) {
+      console.log(`[SHORT] 윌리엄스 프랙탈 조건 확인`);
       console.log(`[SHORT] 윌리엄스 프랙탈 인디케이터: ${fractal}`);
-      if (fractal === 'up') {
+      if (fractal === WILLIAMS_FRACTAL_TYPE.UP) {
         this.shortConditionState.isFractalSignal = true;
       }
     }
   }
 
   /**
-   * 조건 4. 현재 가격이 EMA 20선 혹은 50선 이상/이하로 상향/하향 돌파하는지 확인
+   * 조건 4
    * @param position
    * @param latestClosePrice
    * @param latestEMA20Price
@@ -393,6 +402,7 @@ export class BinanceService {
   ): void {
     if (position === POSITION.LONG) {
       if (this.longConditionState.isFirstDownwardBreakout) {
+        console.log('[LONG] 현재가가 EMA 20 선 상향 돌파 여부 확인');
         console.log(
           `[LONG] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
         );
@@ -400,6 +410,7 @@ export class BinanceService {
           this.longConditionState.isFirstUpwardBreakout = true;
         }
       } else if (this.longConditionState.isSecondDownwardBreakout) {
+        console.log('[LONG] 현재가가 EMA 50 선 상향 돌파 여부 확인');
         console.log(
           `[LONG] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
         );
@@ -409,6 +420,7 @@ export class BinanceService {
       }
     } else if (position === POSITION.SHORT) {
       if (this.shortConditionState.isFirstDownwardBreakout) {
+        console.log('[SHORT] 현재가가 EMA 20 선 하향 돌파 여부 확인');
         console.log(
           `[SHORT] 현재가: ${latestClosePrice}, EMA20: ${latestEMA20Price}`,
         );
@@ -416,6 +428,7 @@ export class BinanceService {
           this.shortConditionState.isFirstUpwardBreakout = true;
         }
       } else if (this.shortConditionState.isSecondDownwardBreakout) {
+        console.log('[SHORT] 현재가가 EMA 50 선 하향 돌파 여부 확인');
         console.log(
           `[SHORT] 현재가: ${latestClosePrice}, EMA50: ${latestEMA50Price}`,
         );
@@ -434,24 +447,41 @@ export class BinanceService {
       for (const key in this.longConditionState) {
         this.longConditionState[key] = false;
       }
-      console.log('[LONG] RESET CONDITION');
+      console.log('[LONG] RESET');
     } else if (position === POSITION.SHORT) {
       for (const key in this.shortConditionState) {
         this.shortConditionState[key] = false;
       }
-      console.log('[SHORT] RESET CONDITION');
+      console.log('[SHORT] RESET');
     }
   }
 
+  /**
+   * 롱/숏 주문 진행 후 익절가/손절가 세팅
+   * @param symbol
+   * @param position
+   * @param profitStopPrice
+   * @param lossStopPrice
+   */
   async setProfitAndLoss(
     symbol: BINANCE_SYMBOL,
     position: POSITION,
     profitStopPrice: number,
     lossStopPrice: number,
   ) {
-    console.log(profitStopPrice, lossStopPrice);
     // 현재 오픈 포지션 조회
     const positionRisk = await this.binanceApiService.getPositionRisk(symbol);
+
+    // 포지션 방향에 따라 익절/손절 검증
+    const currentPrice = positionRisk.markPrice;
+    if (
+      (position === POSITION.LONG &&
+        (profitStopPrice <= currentPrice || lossStopPrice >= currentPrice)) ||
+      (position === POSITION.SHORT &&
+        (profitStopPrice >= currentPrice || lossStopPrice <= currentPrice))
+    ) {
+      throw new Error('익절가와 손절가가 현재 포지션 방향과 맞지 않습니다.');
+    }
 
     // 롱 주문이면 매도를 설정하고, 숏 주문이면 매수를 설정함
     const takeProfitSide = position === POSITION.LONG ? SIDE.SELL : SIDE.BUY;
@@ -459,7 +489,7 @@ export class BinanceService {
     const takeProfitOrder = await this.binanceApiService.newOrder({
       symbol: symbol,
       side: takeProfitSide,
-      quantity: positionRisk.positionAmt,
+      quantity: Math.abs(positionRisk.positionAmt), // 음수 방지
       type: BINANCE_ORDER_TYPE.TAKE_PROFIT,
       price: profitStopPrice * 0.99,
       stopPrice: profitStopPrice,
@@ -469,7 +499,7 @@ export class BinanceService {
     const stopLossOrder = await this.binanceApiService.newOrder({
       symbol: symbol,
       side: takeProfitSide,
-      quantity: positionRisk.positionAmt,
+      quantity: Math.abs(positionRisk.positionAmt), // 음수 방지
       type: BINANCE_ORDER_TYPE.STOP,
       price: lossStopPrice * 0.99,
       stopPrice: lossStopPrice,
