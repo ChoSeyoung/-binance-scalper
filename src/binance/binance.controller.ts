@@ -16,7 +16,7 @@ export class BinanceController {
 
   @Get('/balance')
   async getBalance() {
-    return this.binanceApiService.getBalance();
+    return this.binanceApiService.getAccount();
   }
 
   @Get('/candles')
